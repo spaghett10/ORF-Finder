@@ -1,6 +1,6 @@
 from Bio import SeqIO
 from Bio.Seq import Seq
-import re
+import re # to search sequence for start/stop codons
 
 import os # to verify file extensions and not have BioPython returning warnings
 
@@ -74,19 +74,19 @@ def orf_finder(seq):
             for orf2 in stop_list:
                 diff = orf2.end() - orf1.start()
 
-                # Filtering for sequences where stop codon comes after start codon and nt difference is divisible by 3
-                if diff >= 30 and diff % 3 == 0:
-                    orf_seq = seq[orf1.start():orf2.end()]
+                # Only consider in-frame stop codons downstream of start codon
+                if diff > 0 and diff % 3 == 0:
 
-                    # Add translated sequence and it's start/stop indices to list that is nested within master list
-                    orf = (orf_seq, orf1.start()+1, orf2.end()+1)
-                    orfs.append(orf)
+                    # Apply minimum length filter; if first in-frame stop is too close, discard this start codon entirely
+                    if diff >= 30:
+                        orf_seq = seq[orf1.start():orf2.end()]
 
-                    # end inner loop after valid first sequence approached to move onto next start codon
+                        # Add translated sequence and it's start/stop indices to list that is nested within master list
+                        orf = (orf_seq, orf1.start()+1, orf2.end())
+                        orfs.append(orf)
+
+                    # Always break at first in-frame stop codon, whether ORF is kept or discarded
                     break
-
-                else:
-                    continue
 
     # return nested list of orfs if any found
     if not orfs:
@@ -107,24 +107,32 @@ def output(in_file, out_file, GC, seq_len, seq):
         try:
             sense_orfs = orf_finder(seq)
         except ValueError:
-            file.write(f"No Potential Protein Sequences Found in Forward Strand\n\n")
+            file.write(f"No Open Reading Frames Found in Forward Strand\n\n")
         else:
             # Print out forward strand protein sequence(s) and start/stop locations from nested orf list
+            file.write(f"Total ORFs Found in Forward Strand: {len(sense_orfs)}\n\n")
+
             for sq, stt, stp in sense_orfs:
-                p = sq.translate()
-                file.write(f"Strand: +\nLength: {len(str(p))} amino acids\nSequence: {str(p)}\nStart: {stt}\nEnd: {stp}\n\n")
+                p = sq.translate(to_stop=True)
+                file.write(f"Length: {len(str(p))} amino acids\nSequence: {str(p)}\nStart: {stt}\nEnd: {stp}\n\n")
+
+            file.write(f"---------------------------------END OF FORWARD STRAND ORFS---------------------------------\n\n\n")
 
         try:
             antisense_orfs = orf_finder(seq.reverse_complement())
         except ValueError:
-            file.write(f"No Potential Protein Sequences Found in Reverse Strand")
+            file.write(f"No Open Reading Frames Found in Reverse Strand")
         else:
             # Print out reverse strand protein sequence(s) and start/stop locations
+            file.write(f"Total ORFs Found in Reverse Strand: {len(sense_orfs)}\n\n")
+
             for sq, stt, stp in antisense_orfs:
-                p = sq.translate()
+                p = sq.translate(to_stop=True)
                 stt = seq_len - (stt-1) # Orient start indice to leading strand nt
                 stp = seq_len - (stp-1) # Orient stop indice to leading strand nt
-                file.write(f"Strand: -\nLength: {len(str(p))} amino acids\nSequence: {str(p)}\nStart: {stt}\nEnd: {stp}\n\n")
+                file.write(f"Length: {len(str(p))} amino acids\nSequence: {str(p)}\nStart: {stt}\nEnd: {stp}\n\n")
+
+            file.write(f"---------------------------------END OF REVERSE STRAND ORFS---------------------------------")
 
 if __name__ == "__main__":
     main()
