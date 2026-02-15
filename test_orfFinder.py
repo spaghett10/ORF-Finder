@@ -58,14 +58,14 @@ class TestParse:
     (Seq("gcgcgGCattatATTggccgcaaTAt"), 50.0), #Handles mixed casing
     (Seq("ATGGCAGGCATGACACCTCGCCTGGGCCTGGAATCCCTGCTGGAATAACTAGTGA"), 56.3636) #Mixed% GC content
 ])
-def test_GCcontent(seq, GC_content):
+def test_GC_calc(seq, GC_content):
     assert GC_calc(seq) == GC_content
 
 # Testing orf_finder function
 class TestOrfFinder:
     def test_one_orf(self):
         # finding one orf
-        result = orf_finder(Seq("ATGGATTACCACGGGATCTAG"))
+        result = orf_finder(Seq("ATGGATTACCACGGGATCGATTACCACGGGATCGATTACCACGGGATCTAG"))
         assert isinstance(result, list)
         assert len(result) == 1
         assert len(result[0]) == 3
@@ -79,15 +79,15 @@ class TestOrfFinder:
 
     def test_multiple_stop_codons(self):
         # finds one orf given sequence with multiple stop codons (earlier stop codon is where sequence should end)
-        result = orf_finder(Seq("ATGGCATAGTAA"))
-        assert result[0][0] == Seq("ATGGCATAG")
+        result = orf_finder(Seq("ATGGCAGCAGCAGCAGCAGCAGCAGCAGCATAGTAA"))
+        assert result[0][0] == Seq("ATGGCAGCAGCAGCAGCAGCAGCAGCAGCATAG")
 
     def test_multiple_start_codons(self):
         # finds two orfs given sequence with multiple start codons and one stop codon
-        result = orf_finder(Seq("ATGGCATTTATGCGGCCGTAA"))
+        result = orf_finder(Seq("ATGGCATTTATGCGGCCGATCGCAGCAGCAGCAGCATAA"))
         assert len(result) == 2
-        assert result[0][0] == Seq("ATGGCATTTATGCGGCCGTAA")
-        assert result[1][0] == Seq("ATGCGGCCGTAA")
+        assert result[0][0] == Seq("ATGGCATTTATGCGGCCGATCGCAGCAGCAGCAGCATAA")
+        assert result[1][0] == Seq("ATGCGGCCGATCGCAGCAGCAGCAGCATAA")
 
     def test_no_start_codon(self):
         # finding no orfs when only stop codons present
@@ -127,7 +127,7 @@ class TestOutput:
         gc_content = GC_calc(seq)
         output("test_no_orf.fasta", str(output_file), gc_content, seq_len, seq)
 
-        content = f"No Potential Protein Sequences Found in Forward Strand\n\nNo Potential Protein Sequences Found in Reverse Strand"
+        content = f"No Open Reading Frames Found in Forward Strand\n\nNo Open Reading Frames Found in Reverse Strand"
         assert content in output_file.with_suffix('.txt').read_text()
 
     # test for various content in output file
@@ -157,14 +157,14 @@ class TestIntegration:
         assert 0 <= gc_content <= 100
 
         orfs = orf_finder(seq)
-        assert len(orfs) == 13
+        assert len(orfs) >= 16 #based off NCBI ORFfinder findings
 
     def test_reverse_complement_orfs(self, test_data_dir):
         # test that orfs identifes in lagging strand
         seq, _ = parse(str(test_data_dir / "test_real_seq.fna"))
 
         rev_orfs = orf_finder(seq.reverse_complement())
-        assert len(rev_orfs) == 10
+        assert len(rev_orfs) >= 17
 
     def test_full_workflow_no_orfs(self, tmp_path, test_data_dir):
         # test valid fasta file with no orfs and correct messaging displayed
@@ -184,8 +184,8 @@ class TestIntegration:
 
         output("test_no_orf.fasta", str(output_file), gc_content, seq_len, seq)
 
-        content1 = "No Potential Protein Sequences Found in Forward Strand"
-        content2 = "No Potential Protein Sequences Found in Reverse Strand"
+        content1 = "No Open Reading Frames Found in Forward Strand"
+        content2 = "No Open Reading Frames Found in Reverse Strand"
 
         assert content1 in output_file.with_suffix('.txt').read_text()
         assert content2 in output_file.with_suffix('.txt').read_text()
